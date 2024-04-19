@@ -21,9 +21,6 @@
             font-size: 12px;
         }
     </style>
-    
-    <script src="//apps.bdimg.com/libs/jquery/2.1.4/jquery.min.js"></script>
-    <script src="//webapi.amap.com/loader.js"></script>
 </head>
 <body>
     <div id="container">
@@ -44,6 +41,8 @@
     <div id="msg" style="position: absolute;bottom: 50px;left: 8px;padding: 10px;font-size: 12px;display: none" class="amap-control amap-toolbar">
     </div>
 
+    <!--<script src="https://apps.bdimg.com/libs/jquery/2.1.4/jquery.min.js"></script>
+    <script src="https://webapi.amap.com/loader.js"></script>-->
     <script type="text/javascript">
         /**
          * 计算两个点的距离
@@ -345,7 +344,7 @@
         /**
          * 初始化页面查询最近n天的数据
          */
-        function init(startDate,endDate,carcode) {
+        function initPage(startDate,endDate,carcode) {
             endDate.setHours(23);
             endDate.setMinutes(59);
             endDate.setSeconds(59);
@@ -371,51 +370,65 @@
             });
         }
 
-        window._AMapSecurityConfig = {
-            securityJsCode: "050f5fa1b97c64a1883bf58d32bf2a0d",
-        };
+        function loadAMap(){
+            window._AMapSecurityConfig = {
+                securityJsCode: "050f5fa1b97c64a1883bf58d32bf2a0d",
+            };
 
-        AMapLoader.load({
-            key: "9b539ebc1605a46260add96499679662", //申请好的 Web 端开发 Key，首次调用 load 时必填
-            version: "2.0", //指定要加载的 JS API 的版本，缺省时默认为 1.4.15
-            plugins: ["AMap.Scale", "AMap.ToolBar", "AMap.MoveAnimation"],
-            AMapUI: {version: '1.1'}
-        }).then((AMap) => {
-            //加载PathSimplifier，loadUI的路径参数为模块名中 'ui/' 之后的部分
-            AMapUI.load(['ui/misc/PathSimplifier'], function(PathSimplifier) {
-                window.PathSimplifier = PathSimplifier;
-                if (!PathSimplifier.supportCanvas) {
-                    alert('当前环境不支持 Canvas！');
-                    return;
-                }
+            AMapLoader.load({
+                key: "9b539ebc1605a46260add96499679662", //申请好的 Web 端开发 Key，首次调用 load 时必填
+                version: "2.0", //指定要加载的 JS API 的版本，缺省时默认为 1.4.15
+                plugins: ["AMap.Scale", "AMap.ToolBar", "AMap.MoveAnimation"],
+                AMapUI: {version: '1.1'}
+            }).then((AMap) => {
+                //加载PathSimplifier，loadUI的路径参数为模块名中 'ui/' 之后的部分
+                AMapUI.load(['ui/misc/PathSimplifier'], function(PathSimplifier) {
+                    window.PathSimplifier = PathSimplifier;
+                    if (!PathSimplifier.supportCanvas) {
+                        alert('当前环境不支持 Canvas！');
+                        return;
+                    }
 
-                let urlParams = getUrlParams(window.location.href);
-                let carcode = urlParams.carcode||"";
-                if(carcode == ""){
-                    alert("url地址栏缺少车辆carcode参数");
-                    return;
-                }
-                //默认查询最近三天的数据
-                let endDate = null;
-                let startDate = null;
-                if(urlParams.startDate && urlParams.startDate != ""){
-                    startDate = new Date(urlParams.startDate);
-                }
-                if(urlParams.endDate && urlParams.endDate != ""){
-                    endDate = new Date(urlParams.endDate);
-                }
-                if(endDate == null){
-                    endDate = new Date();
-                }
-                if(startDate == null){
-                    startDate = new Date(endDate);
-                    startDate.setDate(startDate.getDate() - 3);
-                }
-                init(startDate,endDate,carcode);
+                    let urlParams = getUrlParams(window.location.href);
+                    let carcode = urlParams.carcode||"";
+                    if(carcode == ""){
+                        alert("url地址栏缺少车辆carcode参数");
+                        return;
+                    }
+                    //默认查询最近三天的数据
+                    let endDate = null;
+                    let startDate = null;
+                    if(urlParams.startDate && urlParams.startDate != ""){
+                        startDate = new Date(urlParams.startDate);
+                    }
+                    if(urlParams.endDate && urlParams.endDate != ""){
+                        endDate = new Date(urlParams.endDate);
+                    }
+                    if(endDate == null){
+                        endDate = new Date();
+                    }
+                    if(startDate == null){
+                        startDate = new Date(endDate);
+                        startDate.setDate(startDate.getDate() - 3);
+                    }
+                    initPage(startDate,endDate,carcode);
+                });
+            }).catch((e) => {
+                console.error(e); //加载错误提示
             });
-        }).catch((e) => {
-            console.error(e); //加载错误提示
-        });
+        }
+
+        const jqScript = document.createElement('script');
+        jqScript.src = '//apps.bdimg.com/libs/jquery/2.1.4/jquery.min.js';
+        document.head.appendChild(jqScript);
+        jqScript.onload = function() {
+            const mapScript = document.createElement('script');
+            mapScript.src = '//webapi.amap.com/loader.js';
+            document.head.appendChild(mapScript);
+            mapScript.onload = function() {
+                loadAMap();
+            }
+        }
     </script>
 </body>
 </html>
