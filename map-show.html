@@ -1,0 +1,420 @@
+<!doctype html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="initial-scale=1.0, user-scalable=no, width=device-width">
+    <title>地图显示</title>
+    <style>
+        html, body, #container {
+            height: 100%;
+            width: 100%;
+        }
+
+        #page>div{
+            cursor:pointer;
+            border:0px;
+            padding: 0;
+            background-color: unset;
+            box-sizing: border-box;
+            margin: 10px;
+            font-size: 12px;
+        }
+    </style>
+</head>
+<body>
+    <div id="container">
+    </div>
+
+    <div id="tool" class="amap-control amap-toolbar" style="position: absolute;bottom: 90px;right:13px;width: 30px;height: 30px;display:none">
+        <input id="start" type="button" value="启" style="
+            border: 0px;
+            background: unset;
+            align-content: center;
+            width: 100%;
+            height: 100%;
+            cursor: pointer;" onclick="startAnimation()"/>
+    </div>
+
+    <div id="page" class="amap-control amap-toolbar" style="position: absolute;top:0px;margin:10px;background-color: rgb(255,255,255,0.7)"></div>
+
+    <div id="msg" style="position: absolute;bottom: 50px;left: 8px;padding: 10px;font-size: 12px;display: none" class="amap-control amap-toolbar">
+    </div>
+
+    <script src="//apps.bdimg.com/libs/jquery/2.1.4/jquery.min.js"></script>
+    <script src="//webapi.amap.com/loader.js"></script>
+    <script type="text/javascript">
+        /**
+         * 计算两个点的距离
+         */
+        //"Longitude":"116.1877965190","Latitude":"39.7412245827"
+        function compareDistance(ALng,Alat,BLng,BLat){
+            return new AMap.LngLat(ALng, Alat).distance([BLng, BLat]);
+        }
+
+        /**
+         * 解析tbox数据
+         */
+        function renderData(data){
+            let result = new Array();
+            let segment = null;
+            for (let i = 0; i < data.myHistoryPath.length; i++) {
+                let pointA = data.myHistoryPath[i];
+                if(i > 0 ){
+                    let pointABefore = data.myHistoryPath[i-1];
+                    let subTime = Math.floor((new Date(pointA.CreateTime) - new Date(pointABefore.CreateTime)) / 1000);
+                    //大于30分钟则说明是下一段行程
+                    if(subTime >= 60*30){
+                        segment = null;
+                    }
+                }
+
+                if(segment == null){
+                    segment = {
+                        startPoint:null,
+                        endPoint:null,
+                        title:null,
+                        myHistoryPath:[],
+                    };
+                    result.push(segment);
+                }
+                segment.myHistoryPath.push(pointA)
+            }
+
+            //列表添加多段轨迹数据
+            $("#page").html("");
+            for (let i = result.length-1; i >=0 ; i--) {
+                let r = result[i];
+                r.startPoint = r.myHistoryPath[0];
+                r.endPoint = r.myHistoryPath[r.myHistoryPath.length-1];
+                r.title = formatDate(new Date(r.startPoint.CreateTime)) +" ~ " +formatDate(new Date(r.endPoint.CreateTime));
+                r.subTime = Math.floor((new Date(r.endPoint.CreateTime) - new Date(r.startPoint.CreateTime)) / 1000/ 60);
+                r.distance = 0;
+                for (let j = 0; j < r.myHistoryPath.length ; j++) {
+                    let p = r.myHistoryPath[j];
+                    if(j+1<r.myHistoryPath.length){
+                        let pNext = r.myHistoryPath[j+1];
+                        r.distance += compareDistance(p.Longitude, p.Latitude, pNext.Longitude, pNext.Latitude);
+                    }
+                }
+                r.distance = Number(r.distance/1000).toFixed(2);//转换成公里
+
+                $("#page").append("<div onclick=\"switchPath("+i+")\">"+r.title+" "+r.distance+"km/"+r.subTime+"min </div>");
+            }
+            return result;
+        }
+
+        /**
+         * 解析tbox点位数据得到时速距离等
+         * @param start
+         * @param data
+         * @returns {{speedAB: null, pointBIndex: *, pointANext: null, subTimeAB: null, pointCenter: null, distanceANext: null, pointANextIndex: *, distanceAB: null, pointA: null, pointAIndex, pointB: null, pointCenterIndex: number}|null}
+         */
+        function convertData(start,data) {
+            let end = start+3;
+            if(end >= data.myHistoryPath.length){
+                return null;
+            }
+            var myData = {
+                pointAIndex: start,
+                pointANextIndex: start + 1,
+                pointBIndex: end,
+                pointCenterIndex: parseInt((start + end) / 2),
+                pointA: null,
+                pointANext: null,
+                pointB: null,
+                pointCenter: null,
+                distanceAB: null,//米
+                distanceANext: null,
+                subTimeAB: null,//秒
+                speedAB: null,//公里/小时
+            };
+
+            myData.pointA = data.myHistoryPath[myData.pointAIndex];
+            myData.pointANext = data.myHistoryPath[myData.pointANextIndex];
+            myData.pointB = data.myHistoryPath[myData.pointBIndex];
+            myData.pointCenter = data.myHistoryPath[myData.pointCenterIndex];
+            myData.distanceAB = compareDistance(myData.pointA.Longitude, myData.pointA.Latitude, myData.pointB.Longitude, myData.pointB.Latitude);
+            myData.distanceANext = compareDistance(myData.pointA.Longitude, myData.pointA.Latitude, myData.pointANext.Longitude, myData.pointANext.Latitude);
+            myData.subTimeAB = Math.floor((new Date(myData.pointB.CreateTime) - new Date(myData.pointA.CreateTime)) / 1000);
+            myData.speedAB = Number(myData.distanceAB / myData.subTimeAB * 3.6).toFixed(0);
+            return myData;
+        }
+
+        function getUrlParams(url) {
+            const params = new URLSearchParams(url.split('?')[1]);
+            const result = {};
+            params.forEach((value, key) => {
+                result[key] = value;
+            });
+            return result;
+        }
+
+        /**
+         * 重置地图,切换线路的时候需要
+         */
+        function resetMap(){
+            if(window.map){
+                window.map.clearMap()
+            }
+        }
+
+        /**
+         * 渲染最快速度标记
+         * @param myArr
+         */
+        function renderSpeedMarker(myData) {
+            //时速计算的不准确不渲染了
+            return;
+            window.map.add(new AMap.Marker({
+                position: [myData.pointCenter.Longitude, myData.pointCenter.Latitude],
+                offset: new AMap.Pixel(0, 0),
+                animation: "AMAP_ANIMATION_BOUNCE",
+                label: {
+                    offset: new AMap.Pixel(0, 0),  //设置文本标注偏移量
+                    content: myData.speedAB + " KM/H",
+                    direction: 'top' //设置文本标注方位
+                }
+            }));
+        }
+
+        function renderMsg($msg) {
+            let distance = Number(this.getMovedDistance() / 1000).toFixed(2);
+            let minutes = Math.floor((new Date(pathData.myHistoryPath[this.getCursor().idx].CreateTime) - new Date(pathData.myHistoryPath[0].CreateTime)) / 1000 / 60);
+            let msg =
+                   `<div>总里程：${pathData.distance} km，总用时：${pathData.subTime}分钟</div>
+                    <div>行驶距离：${distance} km，耗时：${minutes}分钟</div>
+                    `;
+            $msg.html(msg);
+            $msg.show();
+        }
+
+        /**
+         * 切换线路
+         * @param idx
+         */
+        function switchPath(idx){
+            resetMap();
+
+            window.pathData = window.result[idx];
+            let mapCenter = pathData.myHistoryPath[0] || {Longitude:116.397428, Latitude: 39.90923};
+            let map = new AMap.Map("container", {
+                zoom: 10, //地图级别
+                center: [mapCenter.Longitude, mapCenter.Latitude], //地图中心点
+                mapStyle: "amap://styles/macaron", //设置地图的显示样式
+                viewMode: "2D", //设置地图模式
+            });
+            window.map = map;
+            map.addControl(new AMap.Scale()); //添加比例尺组件到地图实例上
+            map.addControl(new AMap.ToolBar());
+
+            var lineArr = [];
+            var myArr = [];
+
+            let hasSpeedPoint = false;
+            for (let i = 0; i < pathData.myHistoryPath.length; i++) {
+                //转换成点数据
+                lineArr[i] = [Number(pathData.myHistoryPath[i].Longitude),Number(pathData.myHistoryPath[i].Latitude)];
+
+                //计算时速
+                var speedData = convertData(i,pathData);
+                //只关注 170
+                if(speedData != null && speedData.speedAB<=170){
+                    myArr[i] = speedData;
+
+                    if(i%50==0){
+                        hasSpeedPoint = true;
+                        renderSpeedMarker(speedData);
+                    }
+                }
+            }
+
+            if(!hasSpeedPoint){
+                renderSpeedMarker(myArr.slice().sort((a, b) => b.speedAB - a.speedAB)[0]);
+            }
+
+
+            //创建组件实例
+            var pathSimplifierIns = new PathSimplifier({
+                zIndex: 100,
+                autoSetFitView: true,
+                map: map, //所属的地图实例
+                getPath: function(pathData, pathIndex) {
+                    //返回轨迹数据中的节点坐标信息，[AMap.LngLat, AMap.LngLat...] 或者 [[lng|number,lat|number],...]
+                    return pathData.path;
+                },
+                getHoverTitle: function(pathData, pathIndex, pointIndex) {
+                    //返回鼠标悬停时显示的信息
+                    if (pointIndex >= 0) {
+                        //鼠标悬停在某个轨迹节点上
+                        return pathData.name + '，点:' + pointIndex + '/' + pathData.path.length;
+                    }
+                    //鼠标悬停在节点之间的连线上
+                    return pathData.name + '，点数量' + pathData.path.length;
+                },
+                renderOptions: {
+                    //轨迹线的样式
+                    pathLineStyle: {
+                        strokeStyle: "#28F",
+                        lineWidth: 6,
+                        dirArrowStyle: true
+                    }
+                }
+            });
+
+            //这里构建两条简单的轨迹，仅作示例
+            pathSimplifierIns.setData([{
+                name: '行驶轨迹',
+                path: lineArr
+            }]);
+
+            //创建一个巡航器
+            var navgtr = pathSimplifierIns.createPathNavigator(0, {
+                loop: false, //循环播放
+                speed: 3000
+            });
+
+            navgtr.marker = new AMap.Marker({
+                offset: new AMap.Pixel(12, -10),
+                content: "",
+                direction: "right",
+                map: map
+            });
+
+            navgtr.on('move', function() {
+                let distance = Number(this.getMovedDistance() / 1000).toFixed(2);
+                let minutes = Math.floor((new Date(pathData.myHistoryPath[this.getCursor().idx].CreateTime) - new Date(pathData.myHistoryPath[0].CreateTime)) / 1000/ 60);
+                navgtr.marker.setContent(distance+"km<br/>"+minutes+"分钟");
+                navgtr.marker.setPosition(navgtr.getPosition());
+            });
+
+            var $msg = $('#msg');
+            renderMsg.call(navgtr,$msg);
+            $("#tool").show();
+
+            navgtr.on('start resume', function() {
+                //走到终点了重新开始
+                if(this.getCursor().idx >= pathData.myHistoryPath.length - 1){
+                    navgtr.start();
+                }
+            });
+
+            navgtr.on('stop pause', function() {
+                renderMsg.call(this, $msg);
+            });
+
+            navgtr.on('move', function() {
+                renderMsg.call(this, $msg);
+
+                if(this.getCursor().idx >= pathData.myHistoryPath.length - 1){
+                    $("#start").val("启");
+                }
+            });
+
+            window.startAnimation = function startAnimation () {
+                if(navgtr.getNaviStatus() == "stop") {
+                    $("#start").val("停");
+                    navgtr.start();
+                }else if(navgtr.getNaviStatus() == "pause"){
+                    $("#start").val("停");
+                    navgtr.resume()
+                }else if(navgtr.getNaviStatus() == "moving"){
+                    $("#start").val("启");
+                    navgtr.pause()
+                }
+            };
+        }
+
+        /**
+         * 日期格式化成 yyyy-MM-dd HH:mm:ss
+         * @param date
+         * @returns {string}
+         */
+        function formatDate(date) {
+            const year = date.getFullYear();
+            const month = (date.getMonth() + 1).toString().padStart(2, '0');
+            const day = date.getDate().toString().padStart(2, '0');
+            const hours = date.getHours().toString().padStart(2, '0');
+            const minutes = date.getMinutes().toString().padStart(2, '0');
+            const seconds = date.getSeconds().toString().padStart(2, '0');
+
+            return `${year}-${month}-${day} ${hours}:${minutes}:${seconds}`;
+        }
+
+        /**
+         * 初始化页面查询最近n天的数据
+         */
+        function init(startDate,endDate,carcode) {
+            endDate.setHours(23);
+            endDate.setMinutes(59);
+            endDate.setSeconds(59);
+            startDate.setHours(0);
+            startDate.setMinutes(0);
+            startDate.setSeconds(0);
+            $.ajax({
+                url: "https://open-gateway-test.igfax.net/shenshi/BoxApp//ashx/Common/common.ashx?method=getHistoryPathNew&carcode="+ carcode +
+                    "&DateTimeStart=" + encodeURIComponent(formatDate(startDate)) +
+                    "&DateTimeEnd=" + encodeURIComponent(formatDate(endDate)),
+                type: "POST",
+                contentType: "application/x-www-form-urlencoded",
+                dataType: "json",
+                success: function (data) {
+                    console.log(data);
+                    window.result = renderData(data);
+                    console.log(window.result)
+                    switchPath(window.result.length - 1);
+                },
+                error: function (jqXHR, textStatus, errorThrown) {
+                    console.error("请求失败： " + textStatus + ", " + errorThrown);
+                }
+            });
+        }
+
+        window._AMapSecurityConfig = {
+            securityJsCode: "050f5fa1b97c64a1883bf58d32bf2a0d",
+        };
+
+        AMapLoader.load({
+            key: "9b539ebc1605a46260add96499679662", //申请好的 Web 端开发 Key，首次调用 load 时必填
+            version: "2.0", //指定要加载的 JS API 的版本，缺省时默认为 1.4.15
+            plugins: ["AMap.Scale", "AMap.ToolBar", "AMap.MoveAnimation"],
+            AMapUI: {version: '1.1'}
+        }).then((AMap) => {
+            //加载PathSimplifier，loadUI的路径参数为模块名中 'ui/' 之后的部分
+            AMapUI.load(['ui/misc/PathSimplifier'], function(PathSimplifier) {
+                window.PathSimplifier = PathSimplifier;
+                if (!PathSimplifier.supportCanvas) {
+                    alert('当前环境不支持 Canvas！');
+                    return;
+                }
+
+                let urlParams = getUrlParams(window.location.href);
+                let carcode = urlParams.carcode||"";
+                if(carcode == ""){
+                    alert("url地址栏缺少车辆carcode参数");
+                    return;
+                }
+                //默认查询最近三天的数据
+                let endDate = null;
+                let startDate = null;
+                if(urlParams.startDate && urlParams.startDate != ""){
+                    startDate = new Date(urlParams.startDate);
+                }
+                if(urlParams.endDate && urlParams.endDate != ""){
+                    endDate = new Date(urlParams.endDate);
+                }
+                if(endDate == null){
+                    endDate = new Date();
+                }
+                if(startDate == null){
+                    startDate = new Date(endDate);
+                    startDate.setDate(startDate.getDate() - 3);
+                }
+                init(startDate,endDate,carcode);
+            });
+        }).catch((e) => {
+            console.error(e); //加载错误提示
+        });
+    </script>
+</body>
+</html>
