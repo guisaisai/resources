@@ -150,6 +150,8 @@
             return result;
         }
 
+        let urlParams = getUrlParams(window.location.href);
+
         /**
          * 重置地图,切换线路的时候需要
          */
@@ -351,8 +353,9 @@
             startDate.setHours(0);
             startDate.setMinutes(0);
             startDate.setSeconds(0);
+            const u=urlParams.u||"";
             $.ajax({
-                url: "https://open-gateway-test.igfax.net/shenshi/BoxApp//ashx/Common/common.ashx?method=getHistoryPathNew&carcode="+ carcode +
+                url: u+"/shenshi/BoxApp//ashx/Common/common.ashx?method=getHistoryPathNew&carcode="+ carcode +
                     "&DateTimeStart=" + encodeURIComponent(formatDate(startDate)) +
                     "&DateTimeEnd=" + encodeURIComponent(formatDate(endDate)),
                 type: "POST",
@@ -389,8 +392,10 @@
                         return;
                     }
 
-                    let urlParams = getUrlParams(window.location.href);
+                    //车辆代码
                     let carcode = urlParams.carcode||"";
+                    //查询是的时间间隔
+                    let day = urlParams.day||3;
                     if(carcode == ""){
                         alert("url地址栏缺少车辆carcode参数");
                         return;
@@ -409,7 +414,7 @@
                     }
                     if(startDate == null){
                         startDate = new Date(endDate);
-                        startDate.setDate(startDate.getDate() - 3);
+                        startDate.setDate(startDate.getDate() - day);
                     }
                     initPage(startDate,endDate,carcode);
                 });
