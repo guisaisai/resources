@@ -1,3 +1,6 @@
+<!--
+http://localhost:5535/guaranty/zzz-startertest/static/map-show.html?carcode=860521052448077&u=http://open-gateway-test.igfax.net&day=3
+-->
 <!doctype html>
 <html>
 <head>
@@ -101,6 +104,14 @@
 
                 $("#page").append("<div onclick=\"switchPath("+i+")\">"+r.title+" "+r.distance+"km/"+r.subTime+"min </div>");
             }
+
+            $("#page").append("" +
+                "<div>" +
+                    "<a href='#' onclick='previousPage()'>上一页</a>" +
+                    "&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;" +
+                    "<a href='#' onclick='nextPage()'>上一页</a>" +
+                    "<a href='https://cors-anywhere.herokuapp.com/' target=\"_blank\">cors-anywhere</a>\n" +
+                "</div>");
             return result;
         }
 
@@ -344,6 +355,36 @@
         }
 
         /**
+         * 日期加减天
+         * @param date
+         * @param offset
+         * @returns {Date}
+         */
+        function addDays(date,offset){
+            let result = new Date(date);
+            result.setDate(parseInt(date.getDate()) + parseInt(offset));
+            return result;
+        }
+
+        /**
+         * 上一页
+         */
+        function previousPage(){
+            startDate = addDays(startDate,-day);
+            endDate = addDays(endDate,-day);
+            initPage(startDate,endDate,carcode);
+        }
+
+        /**
+         * 下一页
+         */
+        function nextPage(){
+            startDate = addDays(startDate,day);
+            endDate = addDays(endDate,day);
+            initPage(startDate,endDate,carcode);
+        }
+
+        /**
          * 初始化页面查询最近n天的数据
          */
         function initPage(startDate,endDate,carcode) {
@@ -353,9 +394,8 @@
             startDate.setHours(0);
             startDate.setMinutes(0);
             startDate.setSeconds(0);
-            const u=urlParams.u||"";
             $.ajax({
-                url: u+"/shenshi/BoxApp//ashx/Common/common.ashx?method=getHistoryPathNew&carcode="+ carcode +
+                url: "https://cors-anywhere.herokuapp.com/https://m.zontes.com/BoxApp//ashx/Common/common.ashx?method=getHistoryPathNew&carcode="+ carcode +
                     "&DateTimeStart=" + encodeURIComponent(formatDate(startDate)) +
                     "&DateTimeEnd=" + encodeURIComponent(formatDate(endDate)),
                 type: "POST",
@@ -372,6 +412,14 @@
                 }
             });
         }
+
+        //车辆代码
+        let carcode = urlParams.carcode||"";
+        //默认查询最近三天的数据
+        let endDate = null;
+        let startDate = null;
+        //查询是的时间间隔
+        let day = parseInt(urlParams.day)||3;
 
         function loadAMap(){
             window._AMapSecurityConfig = {
@@ -392,30 +440,27 @@
                         return;
                     }
 
-                    //车辆代码
-                    let carcode = urlParams.carcode||"";
-                    //查询是的时间间隔
-                    let day = urlParams.day||3;
                     if(carcode == ""){
                         alert("url地址栏缺少车辆carcode参数");
                         return;
                     }
-                    //默认查询最近三天的数据
-                    let endDate = null;
-                    let startDate = null;
+
                     if(urlParams.startDate && urlParams.startDate != ""){
                         startDate = new Date(urlParams.startDate);
                     }
                     if(urlParams.endDate && urlParams.endDate != ""){
                         endDate = new Date(urlParams.endDate);
                     }
-                    if(endDate == null){
+
+                    if(startDate != null && endDate == null){
+                        endDate = addDays(startDate,day);
+                    }else if(startDate == null && endDate != null){
+                        startDate = addDays(endDate,-day);
+                    }else if(startDate == null && endDate == null){
                         endDate = new Date();
+                        startDate = addDays(endDate,-day);
                     }
-                    if(startDate == null){
-                        startDate = new Date(endDate);
-                        startDate.setDate(startDate.getDate() - day);
-                    }
+
                     initPage(startDate,endDate,carcode);
                 });
             }).catch((e) => {
