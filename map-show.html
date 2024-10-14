@@ -110,8 +110,6 @@ http://localhost:5535/guaranty/zzz-startertest/static/map-show.html?carcode=8605
                     "<a href='#' onclick='previousPage()'>上一页</a>" +
                     "&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;" +
                     "<a href='#' onclick='nextPage()'>上一页</a>" +
-                    "&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;" +
-                    "<a href='https://cors-anywhere.herokuapp.com/' target=\"_blank\">cors-anywhere</a>\n" +
                 "</div>");
             return result;
         }
@@ -395,10 +393,11 @@ http://localhost:5535/guaranty/zzz-startertest/static/map-show.html?carcode=8605
             startDate.setHours(0);
             startDate.setMinutes(0);
             startDate.setSeconds(0);
+            let url = "https://m.zontes.com/BoxApp//ashx/Common/common.ashx?method=getHistoryPathNew&carcode="+ carcode +
+                "&DateTimeStart=" + encodeURIComponent(formatDate(startDate)) +
+                "&DateTimeEnd=" + encodeURIComponent(formatDate(endDate));
             $.ajax({
-                url: "https://cors-anywhere.herokuapp.com/https://m.zontes.com/BoxApp//ashx/Common/common.ashx?method=getHistoryPathNew&carcode="+ carcode +
-                    "&DateTimeStart=" + encodeURIComponent(formatDate(startDate)) +
-                    "&DateTimeEnd=" + encodeURIComponent(formatDate(endDate)),
+                url: "https://corsproxy.io/?"+encodeURIComponent(url),
                 type: "POST",
                 contentType: "application/x-www-form-urlencoded",
                 dataType: "json",
